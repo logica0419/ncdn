@@ -169,7 +169,7 @@ func (p *Gslb) soaRecord() *dns.SOA {
 	}
 }
 
-func (p *Gslb) A(ctx context.Context, qname, subdomain string, rawSrcIP net.IP) ([]dns.RR, error) {
+func (p *Gslb) A(ctx context.Context, qname, subdomain string, srcIP net.IP) ([]dns.RR, error) {
 	records := []dns.RR{}
 
 	// FIXME: we only act on "www.[domain]" for now.
@@ -182,13 +182,13 @@ func (p *Gslb) A(ctx context.Context, qname, subdomain string, rawSrcIP net.IP) 
 
 		ips := p.core.Query(srcIP)
 
-	for _, ip := range ips {
-		ip4 := ip.As4()
-		records = append(records, &dns.A{
-			Hdr: dns.RR_Header{Name: qname, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: Ttl},
-			A:   ip4[:],
-		})
-
+		for _, ip := range ips {
+			ip4 := ip.As4()
+			records = append(records, &dns.A{
+				Hdr: dns.RR_Header{Name: qname, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: Ttl},
+				A:   ip4[:],
+			})
+		}
 	}
 
 	return records, nil
