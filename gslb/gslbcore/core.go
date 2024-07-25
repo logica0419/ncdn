@@ -216,6 +216,36 @@ func (c *GslbCore) Query(srcIP netip.Addr) []netip.Addr {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// FIXME(student): Implement your own query logic
+	for _, r := range c.regions {
+		contained := false
+		for _, p := range r.info.Prefices {
+			if p.Contains(srcIP) {
+				contained = true
+				break
+			}
+		}
+		if !contained {
+			continue
+		}
+
+		slog.Info("Query", slog.String("region", r.info.Id))
+
+		minPopIdx := -1
+		minLat := 1e9
+		for i, lat := range r.popLatency {
+			if lat < minLat {
+				minLat = lat
+				minPopIdx = i
+			}
+		}
+		if minPopIdx == -1 {
+			continue
+		}
+
+		slog.Info("Query", slog.String("pop", c.cfg.Pops[minPopIdx].Id))
+		return []netip.Addr{c.cfg.Pops[minPopIdx].Ip4}
+	}
+
+	slog.Warn("Query", slog.String("error", "region not found"))
 	return []netip.Addr{c.cfg.Pops[0].Ip4}
 }
