@@ -51,7 +51,7 @@ type GslbCore struct {
 
 	// Updated by the `GslbCore.Run()` worker. Access to the fields below should be guarded by `mu`.
 	mu       sync.Mutex
-	popstate []*types.PoPStatus
+	popState []*types.PoPStatus
 	regions  []*RegionState
 	serial   uint32
 }
@@ -78,12 +78,12 @@ func New(cfg *Config) *GslbCore {
 		fetchPoPStatus:   fps,
 		latencyMeasurers: make([]LatencyMeasurer, len(cfg.Regions)),
 
-		popstate: make([]*types.PoPStatus, len(cfg.Pops)),
+		popState: make([]*types.PoPStatus, len(cfg.Pops)),
 		regions:  make([]*RegionState, len(cfg.Regions)),
 		serial:   0,
 	}
-	for i := range c.popstate {
-		c.popstate[i] = &types.PoPStatus{
+	for i := range c.popState {
+		c.popState[i] = &types.PoPStatus{
 			Error: "not yet available",
 		}
 	}
@@ -97,7 +97,7 @@ func New(cfg *Config) *GslbCore {
 		}
 
 		c.regions[i] = &RegionState{
-			info:       r, // copied for convienience
+			info:       r, // copied for convenience
 			popLatency: popLatency,
 		}
 	}
@@ -143,23 +143,23 @@ func (c *GslbCore) UpdatePoPStatus(ctx context.Context) {
 		slog.Info("UpdatePoPStatus done", slog.Duration("took", time.Since(start)))
 	}()
 
-	newstate := make([]*types.PoPStatus, len(c.cfg.Pops))
+	newState := make([]*types.PoPStatus, len(c.cfg.Pops))
 	for i, pop := range c.cfg.Pops {
 		slog.Info("Fetching PoP status", slog.String("pop.Id", pop.Id))
 		ps, err := c.fetchPoPStatus(ctx, pop.Ip4)
 		if err != nil {
 			slog.Error("PoP status fetch failed with error", slog.String("pop.Id", pop.Id), slog.String("error", err.Error()))
-			newstate[i] = &types.PoPStatus{
+			newState[i] = &types.PoPStatus{
 				Error: err.Error(),
 			}
 			continue
 		}
 
-		newstate[i] = ps
+		newState[i] = ps
 	}
 
 	c.mu.Lock()
-	c.popstate = newstate
+	c.popState = newState
 	c.serial++
 	c.mu.Unlock()
 }
@@ -181,7 +181,7 @@ func (c *GslbCore) UpdateLatency(ctx context.Context) {
 				slog.Error("Failed to measure latency",
 					slog.String("latencyMeasurer", lm.DebugString()),
 					slog.String("error", err.Error()))
-				lat = 20000000 // random long latancy
+				lat = 20000000 // random long latency
 			}
 			popLatency[j] = lat
 		}

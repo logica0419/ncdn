@@ -2,8 +2,8 @@
 
 # exit if I'm not root
 if [ "$EUID" -ne 0 ]; then
-    echo "Please run as root"
-    exit
+  echo "Please run as root"
+  exit
 fi
 
 echo "For bisecting, setup ipip tunnel instead of LB..."
