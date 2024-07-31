@@ -55,6 +55,8 @@ function add_ns() {
 set -x
 ip l add name brDev type bridge
 ip l set dev brDev up
+# disable iptables in linux bridge
+sysctl -w net.bridge.bridge-nf-call-iptables=0
 
 add_ns_bare U # "198.51.100.200/24"
 add_ns R "192.168.88.1/24"
@@ -83,7 +85,8 @@ ip -n U r add default via 198.51.100.1
 ip -n LB r add default via 192.168.88.1
 ip -n C0 r add default via 192.168.88.1
 ip -n C1 r add default via 192.168.88.1
-# ip netns exec O ip r add default via 192.168.88.1
+ip -n O r add default via 192.168.88.10
+ip -n O r add default via 192.168.88.11
 
 # LB->C0 ipip tunnel - claim VIP
 ip -n C0 tunnel a ipip0 remote 192.168.88.20 local 192.168.88.10 dev net0
