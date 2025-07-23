@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"math/rand/v2"
 	"net/netip"
 	"sync"
 	"time"
@@ -216,6 +217,63 @@ func (c *GslbCore) Query(srcIP netip.Addr) []netip.Addr {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// FIXME(student): Implement your own query logic
-	return []netip.Addr{c.cfg.Pops[0].Ip4}
+	// SrcIPの所属するリージョンの決定
+	var srcRegion *RegionState
+	for _, region := range c.regions {
+		if region == nil {
+			continue
+		}
+
+		for _, prefix := range region.info.Prefices {
+			if prefix.Contains(srcIP) {
+				slog.Info("Found region for srcIP",
+					slog.String("srcIP", srcIP.String()),
+					slog.String("regionId", region.info.Id),
+				)
+
+				srcRegion = region
+				break
+			}
+		}
+
+		if srcRegion != nil {
+			break
+		}
+	}
+	if srcRegion == nil {
+		slog.Warn("No region found for srcIP",
+			slog.String("srcIP", srcIP.String()),
+			slog.String("PoP", c.cfg.Pops[0].Id),
+		)
+		return []netip.Addr{c.cfg.Pops[0].Ip4}
+	}
+
+	// ここから先はLinkerdを参考にしたP2Cロードバランシングの実装
+	//  Ref: https://qiita.com/kahirokunn/items/d7c4e2a2af66318b2f42#-p2cpower-of-two-choices%E3%81%A7-ewma-%E3%82%92%E5%8A%A0%E9%80%9F
+
+	// ランダムに2つのPoPを選ぶ
+	//  被りのないようIndexを調整
+	aIndex := rand.IntN(len(c.cfg.Pops))
+	bIndex := (aIndex + 1 + rand.IntN(len(c.cfg.Pops)-1)) % len(c.cfg.Pops)
+
+	// 2つのPoPのLatencyを比較して、低い方を選ぶ
+	if srcRegion.popLatency[aIndex] < srcRegion.popLatency[bIndex] {
+		slog.Info("Choosing A PoP",
+			slog.String("srcIP", srcIP.String()),
+			slog.String("aPoP", c.cfg.Pops[aIndex].Id),
+			slog.String("bPoP", c.cfg.Pops[bIndex].Id),
+			slog.Float64("aLatency", srcRegion.popLatency[aIndex]),
+			slog.Float64("bLatency", srcRegion.popLatency[bIndex]),
+		)
+		return []netip.Addr{c.cfg.Pops[aIndex].Ip4}
+	} else {
+		slog.Info("Choosing B PoP",
+			slog.String("srcIP", srcIP.String()),
+			slog.String("aPoP", c.cfg.Pops[aIndex].Id),
+			slog.String("bPoP", c.cfg.Pops[bIndex].Id),
+			slog.Float64("aLatency", srcRegion.popLatency[aIndex]),
+			slog.Float64("bLatency", srcRegion.popLatency[bIndex]),
+		)
+		return []netip.Addr{c.cfg.Pops[bIndex].Ip4}
+	}
 }
