@@ -17,7 +17,7 @@
 #include "xdpcap.h"
 
 // We use clang built-in memcpy, but need a function signature to provoke it.
-void* memcpy(void*, const void*, unsigned long);
+void *memcpy(void *, const void *, unsigned long);
 
 #define DEBUG_LB_MAIN 1
 
@@ -80,20 +80,20 @@ struct {
 #if DEBUG_LB_MAIN
 #define debugk(fmt, ...) bpf_printk(fmt, ##__VA_ARGS__)
 #else
-#define debugk(fmt, ...) \
-  do {                   \
+#define debugk(fmt, ...)                                                       \
+  do {                                                                         \
   } while (0)
 #endif
 
 SEC("xdp")
-int lb_main(struct xdp_md* ctx) {
-  void* data = (void*)(uint64_t)ctx->data;
-  void* data_end = (void*)(uint64_t)ctx->data_end;
+int lb_main(struct xdp_md *ctx) {
+  void *data = (void *)(uint64_t)ctx->data;
+  void *data_end = (void *)(uint64_t)ctx->data_end;
 
   // Get pointer to the `stat_counters`. The stats are stored per CPU,
   // and the driver code will sum them up upon read.
   const uint32_t map_key_zero = 0;
-  struct stat_counters* c =
+  struct stat_counters *c =
       bpf_map_lookup_elem(&stat_counters_map, &map_key_zero);
   if (!c) {
     EXIT(XDP_PASS);
@@ -101,13 +101,13 @@ int lb_main(struct xdp_md* ctx) {
 
   // Get pointer to the `config`. Since the XDP prog can only access BPF maps,
   // we use an BPF map (actually a `BPF_MAP_TYPE_ARRAY`) with a single entry.
-  struct lb_config* config = bpf_map_lookup_elem(&lb_config_map, &map_key_zero);
+  struct lb_config *config = bpf_map_lookup_elem(&lb_config_map, &map_key_zero);
   if (!config) {
     EXIT(XDP_PASS);
   }
 
   // Lookup ip address and mac address to be used for the source header fields.
-  struct destination_entry* src_entry =
+  struct destination_entry *src_entry =
       bpf_map_lookup_elem(&destinations_map, &map_key_zero);
   if (!src_entry) {
     EXIT(XDP_PASS);
@@ -121,8 +121,8 @@ int lb_main(struct xdp_md* ctx) {
     EXIT(XDP_PASS);
   }
 
-  struct ethhdr* eth = data;
-  struct iphdr* ip = (struct iphdr*)(eth + 1);
+  struct ethhdr *eth = data;
+  struct iphdr *ip = (struct iphdr *)(eth + 1);
 
   // Check if the packet is IPv4, has no IP options, is destined to the VIP,
   // and is a TCP packet.
@@ -148,21 +148,26 @@ int lb_main(struct xdp_md* ctx) {
   ++c->rx_packet_total;
   c->rx_total_size += data_end - data;
 
-  struct tcphdr* tcp = (struct tcphdr*)(ip + 1);
+  struct tcphdr *tcp = (struct tcphdr *)(ip + 1);
 
   uint32_t key = ip->saddr + tcp->source;
   debugk("incoming packet: ip=%pI4 port=%u", &ip->saddr, ntohs(tcp->source));
 
   uint32_t dest_idx = (key % config->num_dests) + 1;
   debugk("dest_idx=%d", dest_idx);
-  struct destination_entry* dest = bpf_map_lookup_elem(&destinations_map, &dest_idx);
+  struct destination_entry *dest =
+      bpf_map_lookup_elem(&destinations_map, &dest_idx);
   if (!dest) {
     bpf_printk("ASSERTION FAILURE: no dest entry for %d", dest_idx);
     EXIT(XDP_DROP);
   }
-  debugk("dest ip=%pI4", &dest->ip_address);
-  debugk("dest mac=%02x:%02x:%02x", dest->mac_address[0], dest->mac_address[1], dest->mac_address[2]);
-  debugk("         %02x:%02x:%02x", dest->mac_address[3], dest->mac_address[4], dest->mac_address[5]);
+  debugk("dest ip=%d.%d.%d.%d", dest->ip_address & 0xFF,
+         (dest->ip_address >> 8) & 0xFF, (dest->ip_address >> 16) & 0xFF,
+         (dest->ip_address >> 24) & 0xFF);
+  debugk("dest mac=%02x:%02x:%02x", dest->mac_address[0], dest->mac_address[1],
+         dest->mac_address[2]);
+  debugk("         %02x:%02x:%02x", dest->mac_address[3], dest->mac_address[4],
+         dest->mac_address[5]);
 
   // make room for the additional IP header (IPIP encapsulation)
   if (bpf_xdp_adjust_head(ctx, -(int)sizeof(struct iphdr))) {
@@ -181,17 +186,18 @@ int lb_main(struct xdp_md* ctx) {
 
   // Construct new eth header - the encap packet is from the LB to the
   // destination cache node.
-  eth = (void*)(uint64_t)ctx->data;
+  eth = (void *)(uint64_t)ctx->data;
   eth->h_proto = htons(ETH_P_IP);
 
   memcpy(eth->h_source, src_entry->mac_address, sizeof(src_entry->mac_address));
   memcpy(eth->h_dest, dest->mac_address, sizeof(dest->mac_address));
 
   // Construct the IPIP header.
-  struct iphdr* ip2 = (void*)(eth + 1);
+  struct iphdr *ip2 = (void *)(eth + 1);
 
-  ip = (void*)(ip2 + 1);
-  uint16_t iphdr_tot_len = ntohs(ip->tot_len); // FIXME - should be always fixed.
+  ip = (void *)(ip2 + 1);
+  uint16_t iphdr_tot_len =
+      ntohs(ip->tot_len); // FIXME - should be always fixed.
 
   ip2->version = 4;
   ip2->ihl = 0x5;
@@ -208,7 +214,7 @@ int lb_main(struct xdp_md* ctx) {
   // Calculate the checksum of the IPIP header.
   uint32_t sum = 0;
   for (int i = 0; i < sizeof(struct iphdr) / 2; i++) {
-    sum += ((uint16_t*)ip2)[i];
+    sum += ((uint16_t *)ip2)[i];
   }
   sum = (sum & 0xffff) + (sum >> 16);
   ip2->check = ~sum;
