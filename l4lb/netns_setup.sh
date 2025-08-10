@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd $(dirname $0)
+cd "$(dirname "$0")" || exit
 
 if [ "$EUID" -ne 0 ]; then
     echo "Please run as root"
@@ -8,48 +8,48 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 function add_ns_bare() {
-    ip netns del $1
-    rm /var/run/netns/$1
+    ip netns del "$1"
+    rm /var/run/netns/"$1"
 
-    ip netns add $1
-    ip -n $1 l set lo up
+    ip netns add "$1"
+    ip -n "$1" l set lo up
 
     # disable ipv6 on the netns - for cleaner tcpdump
-    ip netns exec $1 sysctl -w net.ipv6.conf.all.disable_ipv6=1
+    ip netns exec "$1" sysctl -w net.ipv6.conf.all.disable_ipv6=1
     # disable rp_filter for direct server return (DSR)
-    ip netns exec $1 sysctl -w net.ipv4.conf.all.rp_filter=0
-    ip netns exec $1 sysctl -w net.ipv4.conf.default.rp_filter=0
+    ip netns exec "$1" sysctl -w net.ipv4.conf.all.rp_filter=0
+    ip netns exec "$1" sysctl -w net.ipv4.conf.default.rp_filter=0
 }
 
 function add_ns() {
-    ip l del $1-net0
+    ip l del "$1"-net0
 
-    ip netns del $1
-    rm /var/run/netns/$1
+    ip netns del "$1"
+    rm /var/run/netns/"$1"
 
-    ip netns add $1
-    ip -n $1 l set lo up
+    ip netns add "$1"
+    ip -n "$1" l set lo up
 
-    ip l add net0 netns $1 type veth peer name $1-net0
-    ip -n $1 l set net0 up
-    ip l set $1-net0 master brDev
-    ip l set $1-net0 up
+    ip l add net0 netns "$1" type veth peer name "$1"-net0
+    ip -n "$1" l set net0 up
+    ip l set "$1"-net0 master brDev
+    ip l set "$1"-net0 up
 
     # disable TCO - while veth optimizes the TCP transports by
     # skipping checksum computation/verification altogether,
     # we actually need a good checksum since we're going to
     # encap the packets in IPIP tunnels. Otherwise the IPIP
     # receiver would drop the packets given all its bad csums.
-    ip netns exec $1 ethtool --offload net0 tx off rx off
+    ip netns exec "$1" ethtool --offload net0 tx off rx off
 
     # disable ipv6 on the netns - for cleaner tcpdump
-    ip netns exec $1 sysctl -w net.ipv6.conf.all.disable_ipv6=1
+    ip netns exec "$1" sysctl -w net.ipv6.conf.all.disable_ipv6=1
     # disable rp_filter for direct server return (DSR)
-    ip netns exec $1 sysctl -w net.ipv4.conf.all.rp_filter=0
-    ip netns exec $1 sysctl -w net.ipv4.conf.default.rp_filter=0
-    ip netns exec $1 sysctl -w net.ipv4.conf.net0.rp_filter=0
+    ip netns exec "$1" sysctl -w net.ipv4.conf.all.rp_filter=0
+    ip netns exec "$1" sysctl -w net.ipv4.conf.default.rp_filter=0
+    ip netns exec "$1" sysctl -w net.ipv4.conf.net0.rp_filter=0
 
-    ip -n $1 a add $2 dev net0
+    ip -n "$1" a add "$2" dev net0
 }
 
 set -x

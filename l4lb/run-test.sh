@@ -1,13 +1,14 @@
 #!/bin/bash
 set -e
 
-export SRC_DIR=$(readlink -f $(dirname $0)/..)
+SRC_DIR=$(readlink -f "$(dirname "$0")/..")
+export SRC_DIR
 export BIN_DIR=/tmp/ncdn-bin
 mkdir -p ${BIN_DIR}
 
 set -x
-(cd ${SRC_DIR}/l4lb/c && make)
+(cd "${SRC_DIR}"/l4lb/c && make)
 set +x
 
-cd ${SRC_DIR}/l4lb
+cd "${SRC_DIR}"/l4lb
 go test -exec sudo ./l4lbdrv "$@"
