@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/yzp0n/ncdn/httprps"
+	"github.com/yzp0n/ncdn/popcache/cache"
 	"github.com/yzp0n/ncdn/types"
 )
 
@@ -26,6 +28,7 @@ func main() {
 	}
 
 	start := time.Now()
+	store := cache.NewCacheStore()
 
 	mux := http.NewServeMux()
 	rps := httprps.NewMiddleware(mux)
@@ -53,13 +56,44 @@ func main() {
 		// return 204
 		w.WriteHeader(http.StatusNoContent)
 	})
-	mux.Handle("/", &httputil.ReverseProxy{
-		// FIXME: actually cache stuff...
-		Rewrite: func(r *httputil.ProxyRequest) {
-			r.SetXForwarded()
-			r.Out.Header.Set("X-NCDN-PoPCache-NodeId", *nodeId)
-			r.SetURL(originURL)
-		},
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if cacheData := store.Get(r); cacheData != nil && !cacheData.RequiresRevalidate(r) {
+			log.Printf("Cache hit for %s", r.URL.String())
+
+			w.WriteHeader(cacheData.Res.StatusCode)
+			for k, values := range cacheData.Res.Header {
+				for _, v := range values {
+					w.Header().Add(k, v)
+				}
+			}
+			_, _ = io.Copy(w, cacheData.Res.Body)
+
+			return
+		}
+
+		rp := &httputil.ReverseProxy{
+			Rewrite: func(r *httputil.ProxyRequest) {
+				r.SetXForwarded()
+				r.Out.Header.Set("X-NCDN-PoPCache-NodeId", *nodeId)
+				r.SetURL(originURL)
+			},
+			ModifyResponse: func(res *http.Response) error {
+				cacheData, err := cache.New(res)
+				if err != nil {
+					log.Printf("Failed to create cache: %v", err)
+					return err
+				}
+
+				if cacheData != nil {
+					log.Printf("Cache miss for %s, caching response", r.URL.String())
+					store.Put(r, cacheData)
+				} else {
+					log.Printf("Cache miss for %s, not caching response", r.URL.String())
+				}
+				return nil
+			},
+		}
+		rp.ServeHTTP(w, r)
 	})
 
 	log.Printf("Listening on %s...", *listenAddr)

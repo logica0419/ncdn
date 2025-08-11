@@ -73,7 +73,7 @@ func main() {
 		log.Panicf("Failed to create l4lb instance: %v", err)
 	}
 	slog.Info("L4LB started.")
-	defer lb.Close()
+	defer func() { _ = lb.Close() }()
 
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
@@ -88,7 +88,6 @@ func main() {
 			continue
 
 		case <-done:
-			break
 		}
 		break
 	}
