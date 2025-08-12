@@ -1,6 +1,8 @@
 package cache
 
 import (
+	"bytes"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -26,8 +28,11 @@ var (
 )
 
 type Cache struct {
+	StatusCode int
+	Header     http.Header
+	Body       []byte
+
 	now           time.Time
-	Res           *http.Response
 	ReqDirectives *cacheobject.RequestCacheDirectives
 	ResDirectives *cacheobject.ResponseCacheDirectives
 	Expires       *time.Time
@@ -108,7 +113,17 @@ func New(res *http.Response) (*Cache, error) {
 		key += strings.Join(res.Request.Header.Values(h), ", ")
 	}
 	cache.VariesKey = key
-	cache.Res = res
+
+	cache.StatusCode = res.StatusCode
+	cache.Header = res.Header
+	cache.Body, err = io.ReadAll(res.Body)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	_ = res.Body.Close()
+
+	res.Body = io.NopCloser(bytes.NewReader(cache.Body))
+
 	return cache, nil
 }
 

@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -60,13 +59,13 @@ func main() {
 		if cacheData := store.Get(r); cacheData != nil && !cacheData.RequiresRevalidate(r) {
 			log.Printf("Cache hit for %s", r.URL.String())
 
-			w.WriteHeader(cacheData.Res.StatusCode)
-			for k, values := range cacheData.Res.Header {
+			w.WriteHeader(cacheData.StatusCode)
+			for k, values := range cacheData.Header {
 				for _, v := range values {
 					w.Header().Add(k, v)
 				}
 			}
-			_, _ = io.Copy(w, cacheData.Res.Body)
+			_, _ = w.Write(cacheData.Body)
 
 			return
 		}

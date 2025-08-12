@@ -42,6 +42,8 @@ func serveIndexHTMLInternal(w http.ResponseWriter, r *http.Request) error {
 		return fmt.Errorf("Failed to execute index.html template: %w", err)
 	}
 
+	w.Header().Set("Cache-Control", "max-age=604800")
+
 	w.Header().Set("Content-Type", "text/html")
 	_, err = w.Write(buf.Bytes())
 	if err != nil {
